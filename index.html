@@ -3,17 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Bernau Games - CubeLand v2.4</title>
+<title>Bernau Games - CubeLand v2.5</title>
 <style>
 :root{
-  --bg-top:#04050a;
-  --bg-bottom:#081225;
-  --tile:#0c1b2b;
-  --tileEdge:#12324b;
-  --neon1:#06b6d4;
-  --neon2:#7c3aed;
-  --neon3:#f472b6;
-  --neon4:#22c55e;
+  --bg-top:#04050a; --bg-bottom:#081225;
+  --tile:#0c1b2b; --tileEdge:#12324b;
+  --neon1:#06b6d4; --neon2:#7c3aed; --neon3:#f472b6; --neon4:#22c55e;
   --gold:#f6c84c;
 }
 *{box-sizing:border-box}
@@ -35,7 +30,7 @@ canvas#game{width:100%;height:100%;max-width:1400px;max-height:860px;border-radi
 .close{position:absolute;right:10px;top:10px;border-radius:999px;background:rgba(255,255,255,.06);padding:6px 8px;cursor:pointer}
 .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;max-height:52vh;overflow:auto;margin-top:8px}
 .skin-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
-.preview{height:96px;border-radius:8px;overflow:hidden;background:linear-gradient(180deg,#07121f,#050b15)}
+.preview{height:96px;border-radius:8px;overflow:hidden;background:linear-gradient(180deg,#07121f,#050b15);display:flex;align-items:center;justify-content:center}
 @media (max-width:640px){canvas#game{border-radius:8px}}
 </style>
 </head>
@@ -61,10 +56,10 @@ canvas#game{width:100%;height:100%;max-width:1400px;max-height:860px;border-radi
   <div id="olMenu" class="overlay show">
     <div class="card">
       <div class="row">
-        <h2 style="margin:0">Bernau Games — CubeLand (v2.4)</h2>
-        <div class="small">Endlos · Zufällige Portale · Neon Dark</div>
+        <h2 style="margin:0">Bernau Games — CubeLand (v2.5)</h2>
+        <div class="small">Endlos · Zufällige Portale · Hand-Designed Skins</div>
       </div>
-      <p style="margin-top:8px">Springe über Blöcke & Stacheln, sammle Münzen auf denselben Blöcken wie Boden/Decke. Portale erzeugen Spezial-Sektionen (Ship/Flip), danach Rückkehr. Shop (S) für Skins.</p>
+      <p style="margin-top:8px">Springe über Blöcke & Stacheln, sammle Münzen auf denselben Block-Kacheln wie Boden/Decke. Portale erzeugen Spezial-Sektionen (Ship/Flip). Shop (S) für Skins.</p>
       <div class="row" style="margin-top:12px">
         <div>
           <button class="cta" id="btnPlay">▶️ Spielen</button>
@@ -106,7 +101,7 @@ canvas#game{width:100%;height:100%;max-width:1400px;max-height:860px;border-radi
     <div class="card" style="position:relative;max-width:560px">
       <div class="close" id="helpClose">✕</div>
       <h3>Hilfe</h3>
-      <p class="small">Normal: Springen (Space/Tap). Ship: Halten steigt, loslassen sinkt. Flip: invertierte Gravitation (oben ist Boden). Du landest auf Block-Tops (Top-Collision); Seitenkollision oder Stachel ⇒ Tod.</p>
+      <p class="small">Normal: Springen (Space/Tap). Ship: Halten steigt, loslassen sinkt. Flip: invertierte Gravitation (oben Boden). Landung ist auf Block-Tops; Seitenkollision oder Stachel ⇒ Tod.</p>
       <div style="text-align:center;margin-top:8px"><button class="cta" id="helpOk">Verstanden</button></div>
     </div>
   </div>
@@ -114,307 +109,165 @@ canvas#game{width:100%;height:100%;max-width:1400px;max-height:860px;border-radi
 </div>
 
 <script>
-/* ====================
-   CubeLand v2.4 (Full)
-   - Endless level with random portals and sections
-   - Blocks & spikes combos, platform patterns
-   - Coins on same tiles as floor/ceiling
-   - Shop + skins, UI, audio, persistence
-   - Higher jump + rotation
-   ==================== */
+/* ======================================================
+   CubeLand v2.5
+   - Fix: Play button wiring
+   - Hand-designed skins drawn via canvas shapes (no external files)
+   - All previous game logic retained
+   ====================================================== */
 
-/* --------------------
-   Persistence
-   -------------------- */
-const LS_KEY = 'bernau_cubeland_v24';
+/* ---------------- Persistence ---------------- */
+const LS_KEY = 'bernau_cubeland_v25';
 function loadState(){
   try{
-    const s = JSON.parse(localStorage.getItem(LS_KEY)||'{}');
-    return {
-      coins: s.coins ?? 0,
-      best: s.best ?? 0,
-      owned: Array.isArray(s.owned) ? s.owned : ['skin_default'],
-      active: s.active || 'skin_default',
-      muted: !!s.muted
-    };
+    const s = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    return { coins: s.coins ?? 0, best: s.best ?? 0, owned: Array.isArray(s.owned)?s.owned:['skin_default'], active: s.active || 'skin_default', muted: !!s.muted };
   }catch(e){ return {coins:0,best:0,owned:['skin_default'],active:'skin_default',muted:false}; }
 }
 function saveState(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
 let state = loadState();
 
-/* --------------------
-   Canvas
-   -------------------- */
+/* ---------------- Canvas & Layout ---------------- */
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-let DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-function fitCanvas(){
+let DPR = Math.max(1, Math.floor(window.devicePixelRatio||1));
+function fit(){
   const p = canvas.parentElement.getBoundingClientRect();
   let w = Math.min(p.width, 1400);
   let h = Math.min(p.height, 860);
   const ratio = 16/9;
   if(w/h > ratio) w = Math.round(h*ratio); else h = Math.round(w/ratio);
-  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
-  DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+  canvas.style.width = w+'px'; canvas.style.height = h+'px';
+  DPR = Math.max(1, Math.floor(window.devicePixelRatio||1));
   canvas.width = Math.round(w*DPR); canvas.height = Math.round(h*DPR);
   ctx.setTransform(DPR,0,0,DPR,0,0);
 }
-window.addEventListener('resize', fitCanvas);
-fitCanvas();
-const W = ()=>canvas.width / DPR;
-const H = ()=>canvas.height / DPR;
+window.addEventListener('resize', fit); fit();
+const Wf = ()=>canvas.width / DPR, Hf = ()=>canvas.height / DPR;
 
-/* --------------------
-   Audio (simple)
-   -------------------- */
-let audioCtx = null, masterGain = null;
-function initAudio(){
-  if(audioCtx) return;
-  try{
-    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    masterGain = audioCtx.createGain(); masterGain.gain.value = state.muted ? 0 : 0.7; masterGain.connect(audioCtx.destination);
-    buildAmbient();
-  }catch(e){ console.warn('audio fail', e); }
-}
-function buildAmbient(){
-  if(!audioCtx) return;
-  const g = audioCtx.createGain(); g.gain.value = 0.06; g.connect(masterGain);
-  const o = audioCtx.createOscillator(); o.type='sine'; o.frequency.value = 110; o.connect(g); o.start();
-  const lfo = audioCtx.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.08;
-  const lfg = audioCtx.createGain(); lfg.gain.value = 0.03; lfo.connect(lfg); lfg.connect(g.gain); lfo.start();
-}
-function sfx(freq=900, dur=0.06, type='sine', vol=0.12){
-  if(!audioCtx || state.muted) return;
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = type; o.frequency.value = freq; g.gain.value = vol;
-  o.connect(g); g.connect(masterGain);
-  o.start(); o.stop(audioCtx.currentTime + dur);
-}
-function toggleMute(){ state.muted = !state.muted; if(masterGain) masterGain.gain.value = state.muted?0:0.7; document.getElementById('btnMute').textContent = state.muted ? '🔈' : '🔊'; saveState(); }
+/* ---------------- Audio (simple) ---------------- */
+let audioCtx=null, master=null;
+function initAudio(){ if(audioCtx) return; try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); master = audioCtx.createGain(); master.gain.value = state.muted?0:0.72; master.connect(audioCtx.destination); buildAmbient(); }catch(e){ console.warn('audio init failed', e); } }
+function buildAmbient(){ if(!audioCtx) return; const g = audioCtx.createGain(); g.gain.value=0.06; g.connect(master); const o1 = audioCtx.createOscillator(); o1.type='sine'; o1.frequency.value=110; o1.connect(g); o1.start(); const lfo = audioCtx.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.08; const lfg = audioCtx.createGain(); lfg.gain.value = 0.03; lfo.connect(lfg); lfg.connect(g.gain); lfo.start(); }
+function sfx(f=900,t=0.06,type='sine',vol=0.12){ if(!audioCtx||state.muted) return; try{ const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type=type;o.frequency.value=f; g.gain.value=vol; o.connect(g); g.connect(master); o.start(); o.stop(audioCtx.currentTime + t);}catch(e){} }
+function toggleMute(){ state.muted = !state.muted; if(master) master.gain.value = state.muted?0:0.72; document.getElementById('btnMute').textContent = state.muted?'🔈':'🔊'; saveState(); }
 
-/* --------------------
-   Game config
-   -------------------- */
-const G = {
-  tile: 48,            // square tile size (also used for ceiling/floor)
-  floorH: 64,          // floor height band
-  gravity: 1.0,
-  jump: -18.5,         // higher jump — you asked for more jump
-  shipThrust: -0.65,   // ship ascent per frame while holding
-  speedBase: 5.0,
-  speedMax: 11.0,
-  spawnBase: 820,      // ms between normal patterns
-  patternSpacing: 160, // px spacing multiplier
-  coinR: 12,
-  sectionLengthPx: 5200
-};
+/* ---------------- Game config ---------------- */
+const G = { tile:48, floorH:64, gravity:1.0, jump:-18.5, shipThrust:-0.65, speedBase:5.0, speedMax:11.0, spawnBase:820, coinR:12 };
 
-/* --------------------
-   Modes
-   -------------------- */
+/* ---------------- Modes ---------------- */
 const MODE = { NORMAL:'normal', SHIP:'ship', FLIP:'flip' };
 let gameMode = MODE.NORMAL;
 
-/* --------------------
-   Player
-   -------------------- */
-let player = {
-  x: 180,
-  y: 0,
-  w: 60,
-  h: 60,
-  vy: 0,
-  onGround: true,
-  alive: true,
-  rot: 0,
-  skin: state.active || 'skin_default'
-};
+/* ---------------- Player ---------------- */
+let player = { x:180, y:0, w:60, h:60, vy:0, onGround:true, alive:true, rot:0 };
 
-/* --------------------
-   Skins
-   -------------------- */
+/* ---------------- Skins (designed as canvas shapes) ---------------- */
 const skins = [];
-function addSkin(id,name,shape,body,accent,price){
-  skins.push({id,name,shape,body,accent,price});
+function addSkin(id,name,price,drawFn){
+  skins.push({id,name,price,draw:drawFn});
 }
-addSkin('skin_default','Neon Noir','cube','#000000','#06b6d4',0);
-addSkin('skin_pulse','Pulse','cube','#081026','#7c3aed',30);
-addSkin('skin_mint','Mint','rounded','#06121a','#22c55e',40);
-addSkin('skin_fire','Fire','cube','#0b0b0b','#f472b6',70);
-if(!state.owned.includes('skin_default')) state.owned.push('skin_default');
-if(!skins.find(s=>s.id===state.active)) state.active = 'skin_default';
+// default neon noir
+addSkin('skin_default','Neon Noir',0,(ctx,w,h)=>{
+  // black cube with cyan stripes
+  ctx.fillStyle='#000'; roundRectCanvas(ctx, (w-56)/2, (h-56)/2, 56,56,8); ctx.fill();
+  ctx.strokeStyle='#06b6d4'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo((w-56)/2+8,(h-56)/2+56/3); ctx.lineTo((w+56)/2-8,(h-56)/2+56/3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo((w-56)/2+8,(h-56)/2+56*2/3); ctx.lineTo((w+56)/2-8,(h-56)/2+56*2/3); ctx.stroke();
+  // eye
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc((w+56)/2 - 8, (h-56)/2 + 10, 6,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc((w+56)/2 - 6, (h-56)/2 + 10, 3,0,Math.PI*2); ctx.fill();
+});
+// winged cube
+addSkin('skin_wings','Winged Cube',40,(ctx,w,h)=>{
+  ctx.fillStyle='#071026'; roundRectCanvas(ctx,(w-56)/2,(h-56)/2,56,56,8); ctx.fill();
+  // wings
+  ctx.fillStyle='#7c3aed'; drawWing(ctx, (w-56)/2 - 10, (h-56)/2 + 10, 28, 12);
+  ctx.fillStyle='#06b6d4'; drawWing(ctx, (w+56)/2 - 18, (h-56)/2 + 10, 28, 12, true);
+  // stripe
+  ctx.strokeStyle='#ffd54f'; ctx.lineWidth=2; ctx.strokeRect((w-56)/2+6,(h-56)/2+16,44,12,);
+});
+// neon robot
+addSkin('skin_robot','Neon Bot',60,(ctx,w,h)=>{
+  ctx.fillStyle='#0b0b0b'; roundRectCanvas(ctx,(w-60)/2,(h-60)/2,60,60,6); ctx.fill();
+  ctx.fillStyle='#7c3aed'; ctx.fillRect((w-60)/2+10,(h-60)/2+10,40,16);
+  ctx.fillStyle='#06b6d4'; ctx.fillRect((w-60)/2+10,(h-60)/2+34,40,10);
+  // eye panel
+  ctx.fillStyle='#fff'; ctx.fillRect((w-60)/2+24,(h-60)/2+20,12,8);
+});
+// glowing orb style
+addSkin('skin_orb','Glowing Orb',50,(ctx,w,h)=>{
+  ctx.beginPath(); ctx.arc(w/2, h/2, 28, 0, Math.PI*2); ctx.fillStyle='#05060a'; ctx.fill();
+  const g = ctx.createRadialGradient(w/2-6,h/2-6,2,w/2,h/2,28); g.addColorStop(0,'#ffd54f'); g.addColorStop(1,'#f472b6'); ctx.fillStyle=g; ctx.fill();
+});
+// UFO (fun for ship mode)
+addSkin('skin_ufo','Mini UFO',80,(ctx,w,h)=>{
+  ctx.beginPath(); ctx.ellipse(w/2,h/2,30,16,0,0,Math.PI*2); ctx.fillStyle='#061226'; ctx.fill();
+  ctx.fillStyle='#7c3aed'; ctx.fillRect(w/2-12,h/2-8,24,8);
+  ctx.fillStyle='#06b6d4'; ctx.beginPath(); ctx.arc(w/2,h/2-8,6,0,Math.PI*2); ctx.fill();
+});
 
-/* --------------------
-   World state
-   -------------------- */
-let lastTs = 0;
-let obstacles = []; // blocks, spikes, portals
-let coins = [];
-let particles = [];
-let spawnTimer = 0;
-let distance = 0;
-let score = 0;
-let speed = G.speedBase;
-let inSection = false;
-let sectionEndX = 0;
+// helper to draw wing
+function drawWing(ctx,x,y,w,h,flip=false){
+  ctx.beginPath();
+  if(!flip){ ctx.moveTo(x,y); ctx.lineTo(x+w,y+h/2); ctx.lineTo(x,y+h); } else { ctx.moveTo(x+w,y); ctx.lineTo(x,y+h/2); ctx.lineTo(x+w,y+h); }
+  ctx.closePath(); ctx.fill();
+}
+function roundRectCanvas(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function renderSkinThumb(drawFn, cw=240, ch=96){
+  const c = document.createElement('canvas'); c.width=cw; c.height=ch;
+  const cctx = c.getContext('2d');
+  cctx.fillStyle='#071226'; cctx.fillRect(0,0,cw,ch);
+  drawFn(cctx,cw,ch);
+  return c;
+}
 
-/* --------------------
-   Object constructors
-   -------------------- */
-function makeBlock(x,y,w,h){ return { type:'block', x,y,w,h, passed:false }; }
-function makeSpike(x,y,base){ return { type:'spike', x,y,w:base,h:base, passed:false }; }
-function makeCoin(x,y){ return { x,y,r:G.coinR, taken:false }; }
-function makePortal(x,y,kind){ return { type:'portal', x,y,w:56,h:56,kind,triggered:false,passed:false }; }
+/* ---------------- World & state ---------------- */
+let obstacles = [], coins = [], particles = [];
+let spawnAcc = 0, score = 0, distance = 0, speed = G.speedBase, inSection = false, sectionEndX = 0;
+let lastTs = 0, gameState = 'menu';
 
-/* --------------------
-   Utility
-   -------------------- */
+/* ---------------- utility ---------------- */
 function rand(min,max){ return Math.random()*(max-min)+min; }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-function dist(ax,ay,bx,by){ return Math.hypot(ax-bx, ay-by); }
-function AABB(ax,ay,aw,ah,bx,by,bw,bh){ return !(ax+aw<bx || bx+bw<ax || ay+ah<by || by+bh<ay); }
-function lerp(a,b,t){ return a + (b-a)*t; }
-function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function AABB(ax,ay,aw,ah,bx,by,bw,bh){ return !(ax+aw<bx||bx+bw<ax||ay+ah<by||by+bh<ay); }
+function dist(ax,ay,bx,by){ return Math.hypot(ax-bx,ay-by); }
 
-/* --------------------
-   Drawing helpers
-   -------------------- */
-function drawBackground(){
-  const g = ctx.createLinearGradient(0,0,0,H());
-  g.addColorStop(0,'#04050a'); g.addColorStop(1,'#081225');
-  ctx.fillStyle = g; ctx.fillRect(0,0,W(),H());
-}
+/* ---------------- spawn & patterns (same as 2.4 but tuned) ---------------- */
+function makeBlock(x,y,w,h){ return {type:'block',x,y,w,h,passed:false}; }
+function makeSpike(x,y,base){ return {type:'spike',x,y,w:base,h:base,passed:false}; }
+function makeCoin(x,y){ return {x,y,r:G.coinR,taken:false}; }
+function makePortal(x,y,kind){ return {type:'portal',x,y,w:56,h:56,kind,triggered:false,passed:false}; }
 
-function drawParallax(){
-  const t = Date.now()*0.001;
-  for(let i=0;i<6;i++){
-    ctx.globalAlpha = 0.06;
-    ctx.fillStyle = (i%3===0)?'var(--neon1)':(i%3===1)?'var(--neon2)':'var(--neon3)';
-    const x = ((t*30)+i*220) % (W()+360) - 180;
-    ctx.beginPath(); ctx.ellipse(x, 80 + (i%2)*34, 120, 34, 0, 0, Math.PI*2); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
-
-/* draw tile strip for floor/ceiling */
-function drawTileBand(y,rows=2){
-  const t = G.tile;
-  for(let r=0;r<rows;r++){
-    const yy = y + r*t;
-    for(let x=-t; x < W()+t; x += t){
-      ctx.fillStyle = 'var(--tile)';
-      ctx.fillRect(x, yy, t, t);
-      ctx.strokeStyle = 'rgba(255,255,255,.04)';
-      ctx.strokeRect(x+0.5, yy+0.5, t-1, t-1);
-    }
-  }
-}
-
-/* draw block */
-function drawBlock(b){
-  ctx.fillStyle = '#0f2d2b';
-  ctx.fillRect(b.x, b.y, b.w, b.h);
-  ctx.fillStyle = '#0c3f38';
-  ctx.fillRect(b.x-6, b.y-12, b.w+12, 12);
-  ctx.strokeStyle = 'rgba(6,182,212,0.16)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(b.x, b.y, b.w, b.h);
-}
-
-/* draw spike (triangle) with neon edge */
-function drawSpike(s){
-  ctx.fillStyle = '#05060a';
-  ctx.beginPath();
-  ctx.moveTo(s.x, s.y + s.h);
-  ctx.lineTo(s.x + s.w/2, s.y);
-  ctx.lineTo(s.x + s.w, s.y + s.h);
-  ctx.closePath(); ctx.fill();
-  const neon = (Math.floor(s.x/64)%3===0)?'var(--neon1)':(Math.floor(s.x/64)%3===1)?'var(--neon2)':'var(--neon3)';
-  // compute actual color string
-  const color = getComputedStyle(document.documentElement).getPropertyValue(neon).trim() || '#06b6d4';
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2; ctx.stroke();
-}
-
-function drawPortal(p){
-  ctx.save();
-  ctx.translate(p.x, p.y);
-  ctx.fillStyle = p.kind==='ship' ? '#ffd54f' : (p.kind==='flip' ? '#7c3aed' : '#60a5fa');
-  ctx.fillRect(0,0,p.w,p.h);
-  ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 2; ctx.strokeRect(0,0,p.w,p.h);
-  ctx.restore();
-}
-
-function drawCoin(c){
-  ctx.save(); ctx.translate(c.x, c.y);
-  ctx.fillStyle = 'var(--gold)'; ctx.beginPath(); ctx.arc(0,0,c.r,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(-c.r*0.25, -c.r*0.25, c.r*0.45, 0, Math.PI*2); ctx.fill();
-  ctx.restore();
-}
-
-/* draw player (neon noir default or chosen skin) */
-function drawPlayer(){
-  const p = player;
-  ctx.save();
-  ctx.translate(p.x + p.w/2, p.y + p.h/2);
-  ctx.rotate(p.rot);
-  const skin = skins.find(s=>s.id===state.active) || skins[0];
-  const body = skin.id==='skin_default' ? '#000' : skin.body;
-  const accent = skin.id==='skin_default' ? '#06b6d4' : (skin.accent || '#06b6d4');
-  roundRect(-p.w/2, -p.h/2, p.w, p.h, 8);
-  ctx.fillStyle = body; ctx.fill();
-  ctx.strokeStyle = accent; ctx.lineWidth = 3;
-  // neon stripes
-  ctx.beginPath(); ctx.moveTo(-p.w/2+8, -p.h/6); ctx.lineTo(p.w/2-8, -p.h/6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-p.w/2+8, p.h/6); ctx.lineTo(p.w/2-8, p.h/6); ctx.stroke();
-  // glow outline
-  ctx.shadowColor = accent; ctx.shadowBlur = 12;
-  ctx.strokeRect(-p.w/2, -p.h/2, p.w, p.h);
-  ctx.shadowBlur = 0;
-  // eye
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.w*0.18, -p.h*0.14, p.w*0.10, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(p.w*0.20, -p.h*0.14, p.w*0.045, 0, Math.PI*2); ctx.fill();
-  ctx.restore();
-}
-
-/* --------------------
-   Patterns (combined obstacles)
-   - All patterns use block tiles same as floor/ceiling (tile grid)
-   - Coins are placed on top of blocks (same tile look)
-   -------------------- */
 function spawnPatternNormal(baseX){
-  // several pattern types chosen randomly
-  const t = G.tile;
-  const groundY = H() - G.floorH;
+  const t = G.tile; const groundY = Hf() - G.floorH;
   const r = Math.random();
   if(r < 0.18){
-    // small step ladder + spike on top step
-    const steps = 3;
-    for(let i=0;i<steps;i++){
-      const h = t*(1 + i);
+    // small steps + spike
+    for(let i=0;i<3;i++){
+      const h = t*(1+i);
       obstacles.push(makeBlock(baseX + i*(t*1.9), groundY - h, t*1.6, h));
       coins.push(makeCoin(baseX + i*(t*1.9) + t*0.8, groundY - h - 18));
-      if(i===steps-1) obstacles.push(makeSpike(baseX + i*(t*1.9) + t*0.4, groundY - h - t*0.9, t*1.6));
+      if(i===2) obstacles.push(makeSpike(baseX + i*(t*1.9) + t*0.4, groundY - h - t*0.9, t*1.6));
     }
   } else if(r < 0.36){
-    // triple low blocks (platform hop)
+    // triple low blocks
     for(let i=0;i<3;i++){
       obstacles.push(makeBlock(baseX + i*(t*2.6), groundY - t*1.4, t*1.8, t*1.4));
       coins.push(makeCoin(baseX + i*(t*2.6) + t*0.9, groundY - t*1.4 - 18));
     }
   } else if(r < 0.54){
-    // gap + kicker block mid + spike ahead
+    // gap + kicker + spike
     obstacles.push(makeSpike(baseX - t*0.6, groundY - t*0.1, t*1.4));
     obstacles.push(makeBlock(baseX + t*2.4, groundY - t*2, t*1.8, t*2));
     coins.push(makeCoin(baseX + t*2.4 + t*0.9, groundY - t*2 - 18));
   } else if(r < 0.72){
-    // spike wave (several spikes in a row)
+    // spike wave
     for(let i=0;i<5;i++){
       obstacles.push(makeSpike(baseX + i*(t*1.2), groundY - t*0.1, t*1.5));
       if(i%2===0) coins.push(makeCoin(baseX + i*(t*1.2) + t*0.6, groundY - t*1.6));
     }
   } else {
-    // tall block then small block for double jump
     obstacles.push(makeBlock(baseX, groundY - t*3, t*1.8, t*3));
     obstacles.push(makeBlock(baseX + t*3.2, groundY - t*1.4, t*1.8, t*1.4));
     coins.push(makeCoin(baseX + t*0.9, groundY - t*3 - 18));
@@ -422,17 +275,13 @@ function spawnPatternNormal(baseX){
   }
 }
 
-/* Ship section: narrow tunnel top/bottom (ship required) */
 function spawnShipSection(startX){
-  const t = G.tile, groundY = H() - G.floorH;
-  let x = startX;
-  const segs = 11;
+  const t = G.tile; const groundY = Hf() - G.floorH;
+  let x = startX; const segs = 11;
   for(let i=0;i<segs;i++){
     const topH = t*(1 + Math.floor(Math.random()*2));
     const botH = t*(1 + Math.floor(Math.random()*2));
-    // top wall
     obstacles.push(makeBlock(x, 0, t*1.8, topH));
-    // bottom wall
     obstacles.push(makeBlock(x, groundY - botH, t*1.8, botH));
     if(i%3===1) coins.push(makeCoin(x + t*0.9, (topH + (groundY - botH))/2));
     x += t*2.1;
@@ -440,150 +289,39 @@ function spawnShipSection(startX){
   sectionEndX = x + 60;
 }
 
-/* Flip section: ceiling filled with blocks & hanging spikes */
 function spawnFlipSection(startX){
-  const t = G.tile;
-  let x = startX;
-  const segs = 10;
-  const topBand = t*3;
+  const t = G.tile; let x = startX; const segs = 10; const topBand = t*3;
   for(let i=0;i<segs;i++){
-    // top blocks (ceiling)
     obstacles.push(makeBlock(x, 0, t*1.8, topBand));
-    // hanging spike from ceiling (triangles pointing down)
-    if(i%2===0) obstacles.push(makeSpike(x + t*0.2, topBand + t*0.1, t*1.6)); // this spike sits just below the ceiling, treated as normal spike but collision logic handles orientation
+    if(i%2===0) obstacles.push(makeSpike(x + t*0.2, topBand + t*0.1, t*1.6));
     coins.push(makeCoin(x + t*0.9, topBand + t*1.25));
     x += t*2.1;
   }
   sectionEndX = x + 80;
 }
 
-/* --------------------
-   Spawning controller (time + distance + emergency)
-   -------------------- */
-let spawnAcc = 0;
+let spawnAccumulator = 0;
 function updateSpawning(dt){
-  spawnAcc += dt;
-  if(!inSection && spawnAcc >= G.spawnBase){
-    spawnAcc -= G.spawnBase;
-    spawnPatternNormal(W() + 240 + Math.random()*120);
+  spawnAccumulator += dt;
+  if(!inSection && spawnAccumulator >= G.spawnBase){
+    spawnAccumulator -= G.spawnBase;
+    spawnPatternNormal(Wf() + 240 + Math.random()*120);
   }
-
-  // random chance to start a section
   if(!inSection && Math.random() < 0.0075){
-    inSection = true;
-    const startX = W() + 260;
-    const kind = Math.random()<0.5 ? 'ship' : 'flip';
-    obstacles.push(makePortal(startX - 64, H()/2 - 28, kind));
-    if(kind === 'ship') spawnShipSection(startX);
-    else spawnFlipSection(startX);
+    inSection = true; const startX = Wf() + 260; const kind = Math.random()<0.5 ? 'ship':'flip';
+    obstacles.push(makePortal(startX - 64, Hf()/2 - 28, kind));
+    if(kind==='ship') spawnShipSection(startX); else spawnFlipSection(startX);
   }
-
-  // finish section when sectionEndX is left of player
   if(inSection && sectionEndX < player.x - 80){
-    inSection = false;
-    // spawn portal to return to normal mode
-    obstacles.push(makePortal(W() + 220, H()/2 - 28, 'normal'));
-    sectionEndX = W() + 220 + 120;
+    inSection = false; obstacles.push(makePortal(Wf() + 220, Hf()/2 - 28, 'normal')); sectionEndX = Wf() + 220 + 120;
   }
-
-  // maintain coin count occasionally
-  if(coins.length < 4 && Math.random() < 0.06){
-    coins.push(makeCoin(W() + 120 + Math.random()*220, H() - G.floorH - G.tile - 18));
-  }
+  if(coins.length < 4 && Math.random() < 0.06) coins.push(makeCoin(Wf() + 120 + Math.random()*220, Hf() - G.floorH - G.tile - 18));
 }
 
-/* --------------------
-   Collisions & physics
-   -------------------- */
-function update(dt){
-  // update player depending on mode
-  if(gameMode === MODE.SHIP){
-    // ship: controlled ascent when inputPressed
-    if(inputPressed) player.vy += G.shipThrust;
-    else player.vy += -G.shipThrust * 0.6; // gentle downward
-    player.vy = clamp(player.vy, -9, 9);
-    player.y += player.vy;
-    player.onGround = false;
-    // rotation: tilt slightly with input
-    player.rot = lerp(player.rot, inputPressed ? -0.25 : 0.25, 0.12);
-  } else {
-    // gravity or inverted gravity
-    const g = (gameMode === MODE.FLIP) ? -G.gravity : G.gravity;
-    player.vy += g * (dt / 16.67);
-    player.y += player.vy * (dt / 16.67);
-    // rotation rotates in air toward 90deg (pi/2)
-    if(!player.onGround) player.rot = lerp(player.rot, Math.PI/2, 0.12);
-    else player.rot = lerp(player.rot, 0, 0.2);
-  }
-
-  // floor/ceiling constraints
-  const floorY = H() - G.floorH - player.h;
-  if(gameMode !== MODE.FLIP){
-    if(player.y > floorY){ player.y = floorY; player.vy = 0; player.onGround = true; }
-    if(player.y < 0){ player.y = 0; player.vy = 0; }
-  } else {
-    if(player.y < 0){ player.y = 0; player.vy = 0; player.onGround = true; }
-    if(player.y > floorY){ player.y = floorY; player.vy = 0; }
-  }
-
-  // move obstacles world
-  for(let i = obstacles.length - 1; i >= 0; i--){
-    const o = obstacles[i];
-    o.x -= speed * (dt / 16.67);
-
-    // portal triggers
-    if(o.type === 'portal' && !o.triggered){
-      if(AABB(player.x,player.y,player.w,player.h, o.x,o.y,o.w,o.h)){
-        o.triggered = true;
-        if(o.kind === 'ship'){ gameMode = MODE.SHIP; sfx(1180,0.12,'triangle',0.12); }
-        else if(o.kind === 'flip'){ gameMode = MODE.FLIP; sfx(720,0.12,'sine',0.12); }
-        else { gameMode = MODE.NORMAL; sfx(520,0.12,'sine',0.12); }
-      }
-    }
-
-    // scoring (pass obstacles)
-    if(!o.passed && o.type !== 'portal' && (o.x + (o.w || G.tile*1.6) + 6) < player.x - 8){
-      o.passed = true;
-      score += 1;
-      if(score % 10 === 0) speed = Math.min(G.speedMax, speed + 0.25);
-      sfx(1400,0.06,'sine',0.08);
-    }
-
-    // remove off-screen
-    if(o.x + (o.w || 80) < -360) obstacles.splice(i,1);
-  }
-
-  // coins movement & pickup
-  for(let i = coins.length - 1; i >= 0; i--){
-    const c = coins[i];
-    c.x -= speed * (dt / 16.67);
-    if(c.x < -140){ coins.splice(i,1); continue; }
-    if(dist(player.x + player.w/2, player.y + player.h/2, c.x, c.y) < (player.w*0.45 + c.r)){
-      coins.splice(i,1); state.coins = (state.coins || 0) + 1; sfx(1600,0.08,'sine',0.12);
-      saveState();
-    }
-  }
-
-  // obstacle collisions
-  for(const o of obstacles){
-    if(o.type === 'block'){
-      resolveBlockCollision(player, o);
-    } else if(o.type === 'spike'){
-      if(checkSpikeCollision(player, o)) killPlayer();
-    }
-  }
-
-  // distance
-  distance += speed * (dt / 16.67);
-}
-
-/* Block collision resolver:
-   - If collision is predominantly vertical from top -> stand on block (top collision)
-   - If collision is predominantly horizontal (side) -> die
-*/
-function resolveBlockCollision(p, b){
-  if(!AABB(p.x,p.y,p.w,p.h, b.x,b.y,b.w,b.h)) return;
-  // compute overlaps
+/* ---------------- Physics & collisions ---------------- */
+function resolveBlockCollision(p,b){
+  if(!AABB(p.x,p.y,p.w,p.h,b.x,b.y,b.w,b.h)) return;
+  // overlaps
   const leftOverlap = (p.x + p.w) - b.x;
   const rightOverlap = (b.x + b.w) - p.x;
   const topOverlap = (p.y + p.h) - b.y;
@@ -591,264 +329,252 @@ function resolveBlockCollision(p, b){
   const minHoriz = Math.min(leftOverlap, rightOverlap);
   const minVert = Math.min(topOverlap, bottomOverlap);
   if(minHoriz < minVert){
-    // horizontal collision -> side hit -> die
     killPlayer();
   } else {
-    // vertical collision
     if(topOverlap < bottomOverlap){
-      // landed on top
-      p.y = b.y - p.h;
-      p.vy = 0;
-      p.onGround = true;
+      p.y = b.y - p.h; p.vy = 0; p.onGround = true;
     } else {
-      // hit from below (head bump)
-      p.y = b.y + b.h;
-      p.vy = 0;
+      p.y = b.y + b.h; p.vy = 0;
     }
   }
 }
 
-/* Spike collision: approximate by triangle area test for bottom-pointing spikes.
-   For hanging spikes (from ceiling) we placed spike objects at positions where they are intended.
-*/
-function checkSpikeCollision(p, s){
-  // bounding box pre-check
-  if(!AABB(p.x,p.y,p.w,p.h, s.x, s.y, s.w, s.h)) return false;
-  // test player bottom points
-  const pts = [
-    {x: p.x + p.w*0.1, y: p.y + p.h},
-    {x: p.x + p.w*0.9, y: p.y + p.h},
-    {x: p.x + p.w*0.5, y: p.y + p.h}
-  ];
+function checkSpikeCollision(p,s){
+  if(!AABB(p.x,p.y,p.w,p.h,s.x,s.y,s.w,s.h)) return false;
+  const pts = [{x:p.x + p.w*0.1,y:p.y + p.h},{x:p.x + p.w*0.9,y:p.y + p.h},{x:p.x + p.w/2,y:p.y + p.h}];
   for(const pt of pts){
-    if(pointInTri(pt.x, pt.y, s.x, s.y, s.x + s.w/2, s.y - (s.h - 4), s.x + s.w, s.y + s.h)) return true;
-    // also test top-facing triangles (for hanging spikes) approximate by flipping
-    if(pointInTri(pt.x, pt.y, s.x, s.y, s.x + s.w/2, s.y + s.h + (s.h/1.6), s.x + s.w, s.y)) return true;
+    if(pointInTri(pt.x,pt.y, s.x,s.y + s.h, s.x + s.w/2,s.y, s.x + s.w,s.y + s.h)) return true;
+    if(pointInTri(pt.x,pt.y, s.x,s.y, s.x + s.w/2, s.y + s.h + (s.h/1.6), s.x + s.w,s.y)) return true;
   }
   return false;
 }
 function pointInTri(px,py, ax,ay, bx,by, cx,cy){
-  const areaOrig = Math.abs((ax*(by-cy)+bx*(cy-ay)+cx*(ay-by))/2);
-  const a1 = Math.abs((px*(by-cy)+bx*(cy-py)+cx*(py-by))/2);
-  const a2 = Math.abs((ax*(py-cy)+px*(cy-ay)+cx*(ay-py))/2);
-  const a3 = Math.abs((ax*(by-py)+bx*(py-ay)+px*(ay-by))/2);
-  return Math.abs((a1+a2+a3) - areaOrig) < 0.5;
+  const area = (P,Q,R)=>Math.abs((P.x*(Q.y-R.y)+Q.x*(R.y-P.y)+R.x*(P.y-Q.y))/2);
+  const A = {x:ax,y:ay}, B={x:bx,y:by}, C={x:cx,y:cy}, P={x:px,y:py};
+  const A1 = area(P,B,C), A2 = area(A,P,C), A3 = area(A,B,P);
+  return Math.abs((A1+A2+A3) - area(A,B,C)) < 0.5;
 }
 
-/* kill player and gameover flow */
+/* ---------------- kill/restart ---------------- */
 function killPlayer(){
   if(!player.alive) return;
-  player.alive = false;
-  sfx(160,0.22,'sawtooth',0.14);
-  if(score > (state.best || 0)) state.best = score;
+  player.alive = false; sfx(160,0.22,'sawtooth',0.14);
+  if(score > (state.best||0)) state.best = score;
   saveState();
-  // clear world to avoid stacking
-  obstacles.length = 0; coins.length = 0; particles.length = 0;
-  speed = G.speedBase;
-  setTimeout(()=> {
-    document.getElementById('goScore').textContent = score;
-    document.getElementById('goBest').textContent = state.best || 0;
-    document.getElementById('olGO').classList.add('show');
-    gameState = 'gameover';
-  }, 280);
+  obstacles.length=0; coins.length=0; particles.length=0; speed = G.speedBase;
+  setTimeout(()=>{ document.getElementById('goScore').textContent = score; document.getElementById('goBest').textContent = state.best||0; document.getElementById('olGO').classList.add('show'); gameState='gameover'; }, 300);
 }
 
-/* --------------------
-   Input
-   -------------------- */
-let inputPressed = false;
+/* ---------------- Input ---------------- */
+let inputPressed=false;
 function jump(){
-  if(gameState === 'menu'){ startGame(); return; }
-  if(gameState === 'gameover'){ restartGame(); return; }
-  if(gameState !== 'playing') return;
-
-  if(gameMode === MODE.SHIP){
-    inputPressed = true; // ship uses hold
-  } else if(gameMode === MODE.FLIP){
-    if(player.onGround){
-      // inverted gravity jump -> push upward from ceiling
-      player.vy = -G.jump * 0.7; // tuned
-      player.onGround = false;
-      sfx(920,0.06,'sine',0.1);
-    }
-  } else {
-    // normal jump - allow when on top of floor or on top of block
-    if(player.onGround){
-      player.vy = G.jump;
-      player.onGround = false;
-      sfx(960,0.06,'sine',0.11);
-    }
-  }
+  if(gameState==='menu'){ startGame(); return; }
+  if(gameState==='gameover'){ restartGame(); return; }
+  if(gameState!=='playing') return;
+  if(gameMode===MODE.SHIP){ inputPressed = true; }
+  else if(gameMode===MODE.FLIP){ if(player.onGround){ player.vy = -G.jump * 0.7; player.onGround=false; sfx(920,0.06,'sine',0.1); } }
+  else { if(player.onGround){ player.vy = G.jump; player.onGround=false; sfx(960,0.06,'sine',0.11); } }
 }
-function release(){
-  if(gameMode === MODE.SHIP) inputPressed = false;
-}
-document.addEventListener('keydown', e=>{
-  if(e.repeat) return;
-  if(e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); jump(); }
-  else if(e.code === 'KeyS'){ toggleShop(); }
-  else if(e.code === 'KeyP'){ togglePause(); }
-  else if(e.code === 'KeyM'){ initAudio(); toggleMute(); }
-  else if(e.code === 'KeyR'){ restartGame(); }
-});
-document.addEventListener('keyup', e=>{ if(e.code === 'Space' || e.code === 'ArrowUp') release(); });
+function release(){ if(gameMode===MODE.SHIP) inputPressed=false; }
+document.addEventListener('keydown', e=>{ if(e.repeat) return; if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); jump(); } else if(e.code==='KeyS'){ toggleShop(); } else if(e.code==='KeyP'){ togglePause(); } else if(e.code==='KeyM'){ initAudio(); toggleMute(); } else if(e.code==='KeyR'){ restartGame(); } });
+document.addEventListener('keyup', e=>{ if(e.code==='Space' || e.code==='ArrowUp') release(); });
 canvas.addEventListener('pointerdown', ()=>{ jump(); if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); });
 canvas.addEventListener('pointerup', ()=>{ release(); });
 canvas.addEventListener('touchstart', e=>{ e.preventDefault(); jump(); }, {passive:false});
 
-/* --------------------
-   Rendering
-   -------------------- */
-function render(){
-  drawBackground();
-  drawParallax();
+/* ---------------- Update loop ---------------- */
+let lastTime=0;
+function update(dt){
+  // mode physics
+  if(gameMode===MODE.SHIP){
+    if(inputPressed) player.vy += G.shipThrust; else player.vy += -G.shipThrust * 0.6;
+    player.vy = clamp(player.vy, -9, 9);
+    player.y += player.vy;
+    player.onGround=false; player.rot = lerp(player.rot, inputPressed ? -0.25 : 0.25, 0.12);
+  } else {
+    const g = (gameMode===MODE.FLIP) ? -G.gravity : G.gravity;
+    player.vy += g * (dt / 16.67);
+    player.y += player.vy * (dt / 16.67);
+    if(!player.onGround) player.rot = lerp(player.rot, Math.PI/2, 0.12); else player.rot = lerp(player.rot, 0, 0.15);
+  }
 
-  // tile bands: ceiling and floor
-  drawTileBand(0, 3); // ceiling tiles
-  drawTileBand(H() - G.floorH, 3); // floor tiles
+  // floor/ceiling clamp
+  const floorY = Hf() - G.floorH - player.h;
+  if(gameMode !== MODE.FLIP){
+    if(player.y > floorY){ player.y = floorY; player.vy = 0; player.onGround=true; }
+    if(player.y < 0){ player.y=0; player.vy=0; }
+  } else {
+    if(player.y < 0){ player.y = 0; player.vy = 0; player.onGround = true; }
+    if(player.y > floorY){ player.y = floorY; player.vy = 0; }
+  }
 
-  // obstacles
-  for(const o of obstacles){
-    if(o.type === 'block') drawBlock(o);
-    else if(o.type === 'spike') drawSpike(o);
-    else if(o.type === 'portal') drawPortal(o);
+  // move obstacles and handle triggers/passed
+  for(let i=obstacles.length-1;i>=0;i--){
+    const o = obstacles[i];
+    o.x -= speed * (dt / 16.67);
+    if(o.type==='portal' && !o.triggered && AABB(player.x,player.y,player.w,player.h, o.x,o.y,o.w,o.h)){
+      o.triggered = true;
+      if(o.kind==='ship'){ gameMode = MODE.SHIP; sfx(1180,0.12,'triangle',0.12); }
+      else if(o.kind==='flip'){ gameMode = MODE.FLIP; sfx(720,0.12,'sine',0.12); }
+      else { gameMode = MODE.NORMAL; sfx(520,0.12,'sine',0.12); }
+    }
+    if(!o.passed && o.type!=='portal' && (o.x + (o.w||G.tile) + 6) < player.x - 8){
+      o.passed = true; score += 1; if(score % 10 === 0) speed = Math.min(G.speedMax, speed + 0.25); sfx(1400,0.06,'sine',0.08);
+    }
+    if(o.x + (o.w||80) < -360) obstacles.splice(i,1);
   }
 
   // coins
-  for(const c of coins) drawCoin(c);
-
-  // player
-  drawPlayer();
-
-  // particles
-  for(let i = particles.length - 1; i >= 0; i--){
-    const p = particles[i];
-    p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life--;
-    ctx.fillStyle = `rgba(255,255,255,${Math.max(0,p.life/40)})`;
-    ctx.fillRect(p.x, p.y, 2, 2);
-    if(p.life <= 0) particles.splice(i,1);
+  for(let i=coins.length-1;i>=0;i--){
+    const c = coins[i]; c.x -= speed * (dt / 16.67);
+    if(c.x < -140) { coins.splice(i,1); continue; }
+    if(dist(player.x + player.w/2, player.y + player.h/2, c.x, c.y) < (player.w*0.45 + c.r)){
+      coins.splice(i,1); state.coins = (state.coins||0) + 1; sfx(1600,0.08,'sine',0.12); saveState();
+    }
   }
 
-  // center score
-  ctx.font = 'bold 44px Inter, system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(0,0,0,0.36)'; ctx.fillText(score, W()/2 + 3, 72 + 3);
-  ctx.fillStyle = '#fff'; ctx.fillText(score, W()/2, 72);
+  // collisions
+  for(const o of obstacles){
+    if(o.type==='block') resolveBlockCollision(player,o);
+    else if(o.type==='spike') { if(checkSpikeCollision(player,o)) killPlayer(); }
+  }
 
-  // HUD DOM update
+  distance += speed * (dt / 16.67);
+}
+
+/* ---------------- Rendering ---------------- */
+function drawBackground(){
+  const g = ctx.createLinearGradient(0,0,Hf(),0);
+  g.addColorStop(0,'#04050a'); g.addColorStop(1,'#081225');
+  ctx.fillStyle = g; ctx.fillRect(0,0,Wf(),Hf());
+}
+function drawParallax(){
+  const t = Date.now()*0.001;
+  for(let i=0;i<6;i++){
+    ctx.globalAlpha = 0.06; ctx.fillStyle = (i%3===0)?'var(--neon1)':(i%3===1)?'var(--neon2)':'var(--neon3)';
+    const x = ((t*30)+i*220) % (Wf()+360) - 180; ctx.beginPath(); ctx.ellipse(x,80 + (i%2)*34,120,34,0,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function drawTileBand(y,rows=3){
+  const t = G.tile;
+  for(let r=0;r<rows;r++){
+    const yy = y + r*t;
+    for(let x=-t;x<Wf()+t;x+=t){
+      ctx.fillStyle='var(--tile)'; ctx.fillRect(x,yy,t,t);
+      ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.strokeRect(x+0.5,yy+0.5,t-1,t-1);
+    }
+  }
+}
+function drawBlock(b){ ctx.fillStyle='#0f2d2b'; ctx.fillRect(b.x,b.y,b.w,b.h); ctx.fillStyle='#0c3f38'; ctx.fillRect(b.x-6,b.y-12,b.w+12,12); ctx.strokeStyle='rgba(6,182,212,0.16)'; ctx.lineWidth=2; ctx.strokeRect(b.x,b.y,b.w,b.h); }
+function drawSpike(s){ ctx.fillStyle='#05060a'; ctx.beginPath(); ctx.moveTo(s.x,s.y + s.h); ctx.lineTo(s.x + s.w/2, s.y); ctx.lineTo(s.x + s.w, s.y + s.h); ctx.closePath(); ctx.fill(); const neon = (Math.floor(s.x/64)%3===0)?'var(--neon1)':(Math.floor(s.x/64)%3===1)?'var(--neon2)':'var(--neon3)'; const color = getComputedStyle(document.documentElement).getPropertyValue(neon).trim() || '#06b6d4'; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke(); }
+function drawPortal(p){ ctx.save(); ctx.translate(p.x,p.y); ctx.fillStyle = p.kind==='ship'? '#ffd54f' : (p.kind==='flip'? '#7c3aed' : '#60a5fa'); ctx.fillRect(0,0,p.w,p.h); ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=2; ctx.strokeRect(0,0,p.w,p.h); ctx.restore(); }
+function drawCoin(c){ ctx.save(); ctx.translate(c.x,c.y); ctx.fillStyle='var(--gold)'; ctx.beginPath(); ctx.arc(0,0,c.r,0,Math.PI*2); ctx.fill(); ctx.fillStyle='rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(-c.r*0.25,-c.r*0.25,c.r*0.45,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+function drawPlayerSprite(){
+  ctx.save(); ctx.translate(player.x + player.w/2, player.y + player.h/2); ctx.rotate(player.rot);
+  // draw skin via its draw function on an offscreen canvas to simplify reuse
+  const skin = skins.find(s=>s.id === state.active) || skins[0];
+  const off = document.createElement('canvas'); off.width=player.w+6; off.height=player.h+6;
+  const offCtx = off.getContext('2d');
+  offCtx.translate(3,3);
+  // background transparent; user draw function expects ctx,w,h
+  try{ skin.draw(offCtx, off.width, off.height); }catch(e){}
+  ctx.drawImage(off, -off.width/2, -off.height/2);
+  ctx.restore();
+}
+
+/* ---------------- Main render ---------------- */
+function render(){
+  drawBackground(); drawParallax();
+  drawTileBand(0,3); drawTileBand(Hf() - G.floorH,3);
+  for(const o of obstacles){ if(o.type==='block') drawBlock(o); else if(o.type==='spike') drawSpike(o); else if(o.type==='portal') drawPortal(o); }
+  for(const c of coins) drawCoin(c);
+  drawPlayerSprite();
+  for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life--; ctx.fillStyle=`rgba(255,255,255,${Math.max(0,p.life/40)})`; ctx.fillRect(p.x,p.y,2,2); if(p.life<=0) particles.splice(i,1); }
+  ctx.font='bold 44px Inter, system-ui, sans-serif'; ctx.textAlign='center'; ctx.fillStyle='rgba(0,0,0,0.36)'; ctx.fillText(score, Wf()/2 +3, 72+3); ctx.fillStyle='#fff'; ctx.fillText(score, Wf()/2, 72);
   document.getElementById('hudScore').textContent = score;
   document.getElementById('hudCoins').textContent = state.coins || 0;
   document.getElementById('hudBest').textContent = state.best || 0;
 }
 
-/* --------------------
-   Main loop
-   -------------------- */
-let lastTime = 0;
-let gameState = 'menu';
+/* ---------------- Loop ---------------- */
 function loop(ts){
-  if(!lastTime) lastTime = ts;
-  const dt = Math.min(60, ts - lastTime); lastTime = ts;
-
-  if(gameState === 'playing'){
-    update(dt);
-    updateSpawning(dt);
-  }
-
-  render();
-  requestAnimationFrame(loop);
+  if(!lastTs) lastTs = ts;
+  const dt = Math.min(60, ts - lastTs); lastTs = ts;
+  if(gameState === 'playing'){ update(dt); updateSpawning(dt); }
+  render(); requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop);
+let lastTs = 0; requestAnimationFrame(loop);
 
-/* --------------------
-   Game flow
-   -------------------- */
+/* ---------------- Game flow ---------------- */
 function startGame(){
   initAudio();
   document.getElementById('olMenu').classList.remove('show');
   document.getElementById('olGO').classList.remove('show');
   document.getElementById('olShop').classList.remove('show');
-  obstacles = []; coins = []; particles = [];
-  score = 0; distance = 0; speed = G.speedBase; spawnAcc = 0; inSection = false; sectionEndX = 0;
+  obstacles=[]; coins=[]; particles=[];
+  score=0; distance=0; speed=G.speedBase; inSection=false; sectionEndX=0; spawnAccumulator=0; spawnAcc=0;
   gameMode = MODE.NORMAL;
-  player.x = 180; player.y = H() - G.floorH - player.h; player.vy = 0; player.onGround = true; player.alive = true; player.rot = 0;
-  // pre-spawn some patterns to give running start
-  for(let i=0;i<3;i++) spawnPatternNormal(W() + 240 + i*420);
-  gameState = 'playing';
+  player.x = 180; player.y = Hf() - G.floorH - player.h; player.vy = 0; player.onGround = true; player.alive = true; player.rot = 0;
+  for(let i=0;i<3;i++) spawnPatternNormal(Wf() + 240 + i*420);
+  gameState='playing';
 }
-function restartGame(){
-  document.getElementById('olGO').classList.remove('show');
-  startGame();
-}
-function togglePause(){
-  if(gameState === 'playing'){ gameState = 'menu'; document.getElementById('olMenu').classList.add('show'); }
-  else if(gameState === 'menu'){ gameState = 'playing'; document.getElementById('olMenu').classList.remove('show'); }
-}
+function restartGame(){ document.getElementById('olGO').classList.remove('show'); startGame(); }
+function togglePause(){ if(gameState==='playing'){ gameState='menu'; document.getElementById('olMenu').classList.add('show'); } else if(gameState==='menu'){ gameState='playing'; document.getElementById('olMenu').classList.remove('show'); } }
 
-/* --------------------
-   Shop UI
-   -------------------- */
-function toggleShop(){
-  const ol = document.getElementById('olShop');
-  if(ol.classList.contains('show')) { ol.classList.remove('show'); }
-  else { buildShop(); ol.classList.add('show'); }
-}
-function buildShop(){
-  const grid = document.getElementById('skinGrid'); grid.innerHTML = '';
+/* ---------------- Shop UI and wiring ---------------- */
+function buildShopUI(){
+  const grid = document.getElementById('skinGrid'); grid.innerHTML='';
   for(const s of skins){
-    const card = document.createElement('div'); card.className = 'skin-card';
-    const prev = document.createElement('canvas'); prev.width = 240; prev.height = 96; prev.className = 'preview';
-    const pctx = prev.getContext('2d');
-    pctx.fillStyle = '#071226'; pctx.fillRect(0,0,240,96);
-    pctx.fillStyle = s.body; pctx.fillRect(96,24,48,48);
-    pctx.strokeStyle = s.accent; pctx.lineWidth = 3; pctx.strokeRect(96,24,48,48);
-    const title = document.createElement('div'); title.textContent = `${s.name} — ${s.price}🪙`; title.style.fontWeight = '700';
+    const card = document.createElement('div'); card.className='skin-card';
+    const prevWrap = document.createElement('div'); prevWrap.className='preview';
+    const thumb = renderSkinThumb(s.draw,240,96);
+    prevWrap.appendChild(thumb);
+    const title = document.createElement('div'); title.textContent = `${s.name} — ${s.price}🪙`; title.style.fontWeight='700';
     const row = document.createElement('div'); row.style.display='flex'; row.style.gap='8px';
     const btn = document.createElement('button');
     if(state.owned.includes(s.id)){
       btn.textContent = state.active === s.id ? 'Aktiv' : 'Wählen';
       btn.className = 'ghost'; btn.disabled = state.active === s.id;
-      btn.onclick = ()=>{ state.active = s.id; saveState(); buildShop(); sfx(900,0.06,'sine',0.08); };
+      btn.onclick = ()=>{ state.active = s.id; saveState(); buildShopUI(); sfx(900,0.06,'sine',0.08); };
     } else {
-      btn.textContent = `Kaufen ${s.price}🪙`; btn.className = 'cta';
-      btn.onclick = ()=>{
-        if((state.coins || 0) >= s.price){
-          state.coins -= s.price; state.owned.push(s.id); saveState(); buildShop(); sfx(980,0.08,'triangle',0.12);
-        } else { sfx(220,0.06,'square',0.1); }
-      };
+      btn.textContent = `Kaufen ${s.price}🪙`; btn.className='cta';
+      btn.onclick = ()=>{ if((state.coins||0) >= s.price){ state.coins -= s.price; state.owned.push(s.id); saveState(); buildShopUI(); sfx(980,0.08,'triangle',0.12); } else { sfx(220,0.06,'square',0.1); } };
     }
-    row.appendChild(btn);
-    card.appendChild(prev); card.appendChild(title); card.appendChild(row);
+    row.appendChild(btn); card.appendChild(prevWrap); card.appendChild(title); card.appendChild(row);
     grid.appendChild(card);
   }
   document.getElementById('shopCoins').textContent = state.coins || 0;
 }
 
-/* --------------------
-   UI bindings
-   -------------------- */
-document.getElementById('btnPlay').onclick = ()=> startGame();
-document.getElementById('btnOpenShop').onclick = ()=> { document.getElementById('olShop').classList.add('show'); buildShop(); };
-document.getElementById('shopClose').onclick = ()=> document.getElementById('olShop').classList.remove('show');
-document.getElementById('btnCloseShop').onclick = ()=> document.getElementById('olShop').classList.remove('show');
-document.getElementById('btnRestart').onclick = ()=> restartGame();
-document.getElementById('btnGoShop').onclick = ()=> { document.getElementById('olGO').classList.remove('show'); document.getElementById('olShop').classList.add('show'); buildShop(); };
-document.getElementById('btnPause').onclick = ()=> togglePause();
-document.getElementById('btnMute').onclick = ()=> { initAudio(); toggleMute(); };
-document.getElementById('btnShop').onclick = ()=> toggleShop();
-document.getElementById('btnHelp').onclick = ()=> document.getElementById('olHelp').classList.add('show');
-document.getElementById('helpClose').onclick = ()=> document.getElementById('olHelp').classList.remove('show');
-document.getElementById('helpOk').onclick = ()=> document.getElementById('olHelp').classList.remove('show');
+/* ---------------- UI bindings (fix Play button issue) ---------------- */
+document.getElementById('btnPlay').addEventListener('click', ()=> startGame());
+document.getElementById('btnOpenShop').addEventListener('click', ()=> { document.getElementById('olShop').classList.add('show'); buildShopUI(); });
+document.getElementById('shopClose').addEventListener('click', ()=> document.getElementById('olShop').classList.remove('show'));
+document.getElementById('btnCloseShop').addEventListener('click', ()=> document.getElementById('olShop').classList.remove('show'));
+document.getElementById('btnRestart').addEventListener('click', ()=> restartGame());
+document.getElementById('btnGoShop').addEventListener('click', ()=> { document.getElementById('olGO').classList.remove('show'); document.getElementById('olShop').classList.add('show'); buildShopUI(); });
+document.getElementById('btnPause').addEventListener('click', ()=> togglePause());
+document.getElementById('btnMute').addEventListener('click', ()=> { initAudio(); toggleMute(); });
+document.getElementById('btnShop').addEventListener('click', ()=> toggleShop());
+document.getElementById('btnHelp').addEventListener('click', ()=> document.getElementById('olHelp').classList.add('show'));
+document.getElementById('helpClose').addEventListener('click', ()=> document.getElementById('olHelp').classList.remove('show'));
+document.getElementById('helpOk').addEventListener('click', ()=> document.getElementById('olHelp').classList.remove('show'));
 
-/* --------------------
-   Kickstart values
-   -------------------- */
+/* ensure Play button definitely clickable on load (fix race) */
+window.addEventListener('load', ()=>{ const playBtn = document.getElementById('btnPlay'); playBtn.onclick = ()=> startGame(); });
+
+/* start audio on first user gesture */
+function initAudioOnGesture(){ initAudio(); document.removeEventListener('pointerdown', initAudioOnGesture); }
+document.addEventListener('pointerdown', initAudioOnGesture);
+
+/* spawn tick safety */
+setInterval(()=>{ if(gameState==='playing') updateSpawning(200); }, 200);
+
+/* save on unload */
+window.addEventListener('beforeunload', ()=> saveState());
 document.getElementById('hudBest').textContent = state.best || 0;
 document.getElementById('hudCoins').textContent = state.coins || 0;
-
-/* keep spawn ticking even if loop is heavy */
-let spawnAcc = 0;
-setInterval(()=>{ if(gameState==='playing') updateSpawning(200); }, 200);
 
 </script>
 </body>
